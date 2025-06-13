@@ -33,6 +33,7 @@ use meshtassy_net::key::ChannelKey;
 use meshtassy_net::{DecodedPacket, Decrypted, Encrypted, Header, Packet};
 use meshtastic_protobufs::meshtastic::{Data, FromRadio, MyNodeInfo, PortNum, ToRadio, NodeInfo, User};
 mod usb_framer;
+mod packet_relay;
 
 mod boards;
 
@@ -88,6 +89,13 @@ async fn packet_processor_task() {
             let _success = db.add_or_update_node_from_packet(&packet);
         }
     }
+}
+
+// Packet relay task - handles retransmission and relay logic
+#[embassy_executor::task]
+async fn packet_relay_task() {
+    // Call the implementation from the packet_relay module
+    crate::packet_relay::packet_relay_task_impl().await;
 }
 
 #[embassy_executor::main]
@@ -158,6 +166,9 @@ async fn main(spawner: Spawner) {
         info!("No LEDs available on this board");
     }// Spawn the packet processor task
     spawner.spawn(packet_processor_task()).unwrap();
+
+    // Spawn the packet relay task
+    spawner.spawn(packet_relay_task()).unwrap();
 
     // Spawn the USB serial task
     spawner.spawn(usb_serial_task(usb, cdc)).unwrap();

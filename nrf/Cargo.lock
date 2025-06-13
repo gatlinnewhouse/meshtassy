@@ -1122,6 +1122,7 @@ dependencies = [
  "embedded-io",
  "embedded-io-async",
  "embedded-storage",
+ "fastrand",
  "femtopb",
  "femtopb-build",
  "fixed",
