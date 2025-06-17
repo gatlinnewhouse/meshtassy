@@ -98,6 +98,7 @@ async fn packet_relay_task() {
     crate::packet_relay::packet_relay_task_impl().await;
 }
 
+
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let p = embassy_nrf::init(Default::default());
@@ -164,17 +165,21 @@ async fn main(spawner: Spawner) {
         info!("LEDs initialized");
     } else {
         info!("No LEDs available on this board");
-    }// Spawn the packet processor task
-    spawner.spawn(packet_processor_task()).unwrap();
-
-    // Spawn the packet relay task
-    spawner.spawn(packet_relay_task()).unwrap();
-
-    // Spawn the USB serial task
-    spawner.spawn(usb_serial_task(usb, cdc)).unwrap();
+    }
 
     // Initialize the node databases
     initialize_node_database().await;
+
+    // Spawn background tasks
+    info!("Spawning background tasks...");
+    
+    // Spawn the packet processor task to handle node database updates
+    spawner.spawn(packet_processor_task()).unwrap();
+    info!("Packet processor task spawned");
+    
+    // Spawn the packet relay task to handle packet relaying and retransmission
+    spawner.spawn(packet_relay_task()).unwrap();
+    info!("Packet relay task spawned");
 
     info!(
         "Starting Meshtastic Radio on frequency {} Hz with syncword 0x{:02X}",
