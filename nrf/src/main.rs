@@ -90,6 +90,9 @@ async fn packet_processor_task() {
     }
 }
 
+mod environmental_telemetry;
+use environmental_telemetry::EnvironmentalData;
+
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let p = embassy_nrf::init(Default::default());
@@ -129,6 +132,21 @@ async fn main(spawner: Spawner) {
     let reset = board.lora.reset;
     let dio1 = board.lora.dio1;
     let busy = board.lora.busy;
+
+    // Try initializing a BME
+    //TODO: throw this in an embassy task that eventually scans a given i2c bus and configs the
+    //sensors
+    info!("Try initializing a BME on the I2C bus");
+    if let Some(i2c) = board.i2c {
+        let mut bme = bosch_bme680::AsyncBme680::new(
+            i2c,
+            bosch_bme680::DeviceAddress::Secondary,
+            Delay,
+            24, // wrong initial temperature, is it in C?
+        );
+        bme.setup().await;
+        let metrics = bme.get_metrics().await;
+    }
 
     // are we configured to use DIO2 as RF switch?  (This should be true for Sx1262)
     info!("Use dio2 as RFSwitch? {:?}", Sx1262.use_dio2_as_rfswitch());
