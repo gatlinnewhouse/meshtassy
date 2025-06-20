@@ -13,8 +13,11 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 
-fn main() {
+//TODO: a function that can read a config and map to peripheral pins to cut down on duplicated
+//code? e.g. read TOML file with pins specified for I2C and SX1262 connection then replace values
+//s.t. board files are architecture specific and not vendor/model specific
 
+fn main() {
     // // build the meshtastic protobufs using femtopb
     // femtopb_build::compile_protos(
     //     &["src/protobufs/meshtastic/mesh.proto"],
