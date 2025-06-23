@@ -69,14 +69,8 @@ impl EnvironmentData for TelemetrySensor<BME<'static>> {
     async fn get_metrics(&mut self) -> Option<EnvironmentMetrics<'_>> {
         match self.device.measure().await {
             Ok(data) => {
-                info!("BME680 get_metrics()\n");
-                info!("Temperature: {:?}", data.temperature);
-                info!("Humidity: {:?}%", data.humidity);
-                info!("Pressure: {:?}", data.pressure);
-                if let Some(gr) = data.gas_resistance {
-                    info!("Gas Resistance: {:?}", gr);
-                }
-                info!("IAQ: N/A");
+                //TODO: a macro for multiline info messages to make this less annoying
+                info!("BME680 get_metrics()\n\t\t Temperature: {:?}\n\t\t Humidity: {:?}\n\t\t Pressure: {:?}\n\t\t Gas Resistance: {:?}\n\t\t IAQ: N/A", data.temperature, data.humidity, data.pressure, data.gas_resistance);
                 Some(EnvironmentMetrics {
                     temperature: Some(data.temperature),
                     relative_humidity: Some(data.humidity),
@@ -125,8 +119,10 @@ impl EnvironmentData for TelemetrySensor<SCD30<'static>> {
         if self.device.data_ready().await.is_ok_and(|b| b == true) {
             match self.device.read_measurement().await {
                 Ok(data) => {
-                    info!("Temperature: {:?}", data.temperature);
-                    info!("Humidity: {:?}", data.humidity);
+                    info!(
+                        "SCD30 get_metrics()\n\t\t Temperature: {:?}\n\t\t Humidity: {:?}",
+                        data.temperature, data.humidity
+                    );
                     Some(EnvironmentMetrics {
                         temperature: Some(data.temperature),
                         relative_humidity: Some(data.humidity),
