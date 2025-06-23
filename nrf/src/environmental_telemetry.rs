@@ -1,50 +1,75 @@
 use bosch_bme680::{AsyncBme680, BmeError};
 use defmt::*;
-use embassy_nrf::{
-    peripherals::{self, TWISPI1},
-    twim::{self, Twim},
-};
+use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
+use embassy_nrf::{peripherals::TWISPI1, twim::Twim};
+use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_time::Delay;
 use femtopb::UnknownFields;
-use lora_phy::DelayNs;
+use libscd::asynchronous::scd30::Scd30;
 use meshtastic_protobufs::meshtastic::EnvironmentMetrics;
 
-//todo: create a task that handles polling sensors and assembling the protobufs for
-//telemetry data, read the configuration protobufs stored on the device to determine
-//behavior of the task
+/// Dummy trait for narrowing proxied remote structs from crates
+pub trait CrateSensor {}
 
-/// Environmental Telemetry source data trait
-///
-/// Sensors providing environmental telemetry data must implment this trait
-pub trait EnvironmentalData {
-    /// Setup an environmental sensor
+/// Proxy struct for remote device structs
+pub struct TelemetrySensor<T: CrateSensor> {
+    pub device: T,
+}
+
+/// Dummy trait for narrowing proxied remote errors from crates
+pub trait CrateError {}
+
+/// Proxy struct for remote device errors that lack defmt support
+struct RemoteError<E: CrateError> {
+    error: E,
+}
+
+/// Trait for environmental telemetry data sources
+pub trait EnvironmentData {
     async fn setup(&mut self) {}
-    /// Get metrics for the environmental telemetry payload from a given sensor
-    ///
-    /// # Returns
-    /// * Optional `EnvironmentMetrics` struct with data from a given sensor
-    async fn get_metrics<'a>(&mut self) -> Option<EnvironmentMetrics<'a>> {
+    async fn get_metrics(&mut self) -> Option<EnvironmentMetrics<'_>> {
         None
     }
 }
 
-/// Try implementing environmentaldata trait on bme
-impl EnvironmentalData for AsyncBme680<Twim<'_, TWISPI1>, Delay> {
+/// Alias BME typedef for shorter name
+type BME<'dev> = AsyncBme680<I2cDevice<'dev, NoopRawMutex, Twim<'dev, TWISPI1>>, Delay>;
+/// Implement the dummy trait on the BME struct
+impl<'dev> CrateSensor for BME<'dev> {}
+
+/// Alias BME Error typeddef for shorter name
+type BMEError<'dev> = BmeError<I2cDevice<'dev, NoopRawMutex, Twim<'dev, TWISPI1>>>;
+/// Implement the dummy trait on the BMEError struct
+impl<'dev> CrateError for BMEError<'dev> {}
+/// Implement defmt for the remote crate error struct
+impl defmt::Format for RemoteError<BMEError<'_>> {
+    fn format(&self, fmt: Formatter) {
+        match self.error {
+            BmeError::WriteError(e) => defmt::write!(fmt, "Write Error: {:#?}", e),
+            BmeError::WriteReadError(e) => defmt::write!(fmt, "Write Read Error: {:#?}", e),
+            BmeError::UnexpectedChipId(e) => defmt::write!(fmt, "Unexpected Chip ID: {}", e),
+            BmeError::MeasuringTimeOut => defmt::write!(fmt, "Measuring Timeout"),
+            BmeError::Uninitialized => defmt::write!(fmt, "Uninitialized"),
+        }
+    }
+}
+
+/// Implement EnvironmentData for BME
+impl EnvironmentData for TelemetrySensor<BME<'static>> {
     async fn setup(&mut self) {
-        let bme_config = bosch_bme680::Configuration::default();
-        match self.initialize(&bme_config).await {
+        let cfg = bosch_bme680::Configuration::default();
+        match self.device.initialize(&cfg).await {
             Ok(_) => info!("BME680 Configured"),
             Err(e) => {
-                let re = RemoteError { inner: e };
+                let re = RemoteError::<BMEError> { error: e };
                 error!("Error configuring BME680: {:?}", re)
             }
         }
-        // 12 second delay after configuration
-        Delay.delay_ms(12000).await;
     }
-    async fn get_metrics<'a>(&mut self) -> Option<EnvironmentMetrics<'a>> {
-        match self.measure().await {
+    async fn get_metrics(&mut self) -> Option<EnvironmentMetrics<'_>> {
+        match self.device.measure().await {
             Ok(data) => {
+                info!("BME680 get_metrics()\n");
                 info!("Temperature: {:?}", data.temperature);
                 info!("Humidity: {:?}%", data.humidity);
                 info!("Pressure: {:?}", data.pressure);
@@ -79,7 +104,7 @@ impl EnvironmentalData for AsyncBme680<Twim<'_, TWISPI1>, Delay> {
                 })
             }
             Err(e) => {
-                let re = RemoteError { inner: e };
+                let re = RemoteError::<BMEError> { error: e };
                 error!("Error fetching data from BME: {:?}", re);
                 None
             }
@@ -87,21 +112,54 @@ impl EnvironmentalData for AsyncBme680<Twim<'_, TWISPI1>, Delay> {
     }
 }
 
-/// impls on remote types are not allowed, but you can proxy them
-/// todo: find way to force proxying if need be in the trait
-struct RemoteError<'a> {
-    inner: BmeError<Twim<'a, TWISPI1>>,
-}
+/// Alias SCD30 typedef for shorter name
+type SCD30<'dev> = Scd30<I2cDevice<'dev, NoopRawMutex, Twim<'dev, TWISPI1>>, Delay>;
+impl<'dev> CrateSensor for SCD30<'dev> {}
 
-/// Implement defmt formatting for errors that do not already implement it
-impl defmt::Format for RemoteError<'_> {
-    fn format(&self, fmt: Formatter) {
-        match self.inner {
-            BmeError::WriteError(e) => defmt::write!(fmt, "Write Error: {:#?}", e),
-            BmeError::WriteReadError(e) => defmt::write!(fmt, "Write Read Error: {:#?}", e),
-            BmeError::UnexpectedChipId(e) => defmt::write!(fmt, "Unexpected Chip ID: {}", e),
-            BmeError::MeasuringTimeOut => defmt::write!(fmt, "Measuring Timeout"),
-            BmeError::Uninitialized => defmt::write!(fmt, "Uninitialized"),
+/// Implement EnvironmentData for SCD30
+impl EnvironmentData for TelemetrySensor<SCD30<'static>> {
+    async fn setup(&mut self) {
+        // not much is required initially here. perhaps eventually this runs the calibration routine
+    }
+    async fn get_metrics(&mut self) -> Option<EnvironmentMetrics<'_>> {
+        if self.device.data_ready().await.is_ok_and(|b| b == true) {
+            match self.device.read_measurement().await {
+                Ok(data) => {
+                    info!("Temperature: {:?}", data.temperature);
+                    info!("Humidity: {:?}", data.humidity);
+                    Some(EnvironmentMetrics {
+                        temperature: Some(data.temperature),
+                        relative_humidity: Some(data.humidity),
+                        barometric_pressure: None,
+                        gas_resistance: None,
+                        voltage: None,
+                        current: None,
+                        iaq: None,
+                        distance: None,
+                        lux: None,
+                        white_lux: None,
+                        ir_lux: None,
+                        uv_lux: None,
+                        wind_direction: None,
+                        wind_speed: None,
+                        weight: None,
+                        wind_gust: None,
+                        wind_lull: None,
+                        radiation: None,
+                        rainfall_1h: None,
+                        rainfall_24h: None,
+                        soil_moisture: None,
+                        soil_temperature: None,
+                        unknown_fields: UnknownFields::default(),
+                    })
+                }
+                Err(e) => {
+                    error!("Could not get measurements from SCD30: {:?}", e);
+                    None
+                }
+            }
+        } else {
+            None
         }
     }
 }

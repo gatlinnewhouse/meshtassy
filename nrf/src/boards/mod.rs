@@ -6,8 +6,8 @@
 use embassy_nrf::gpio::{Input, Output};
 use embassy_nrf::mode::Blocking;
 use embassy_nrf::spim::Spim;
-use embassy_nrf::twim::Twim;
 use embassy_nrf::{peripherals, rng, usb};
+use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
 
@@ -31,7 +31,12 @@ pub struct BoardPeripherals {
     /// Random number generator
     pub rng: rng::Rng<'static, peripherals::RNG, Blocking>,
     /// I2C bus config
-    pub i2c: Option<Twim<'static, peripherals::TWISPI1>>,
+    pub i2c: Option<
+        &'static mut embassy_sync::mutex::Mutex<
+            NoopRawMutex,
+            embassy_nrf::twim::Twim<'static, peripherals::TWISPI1>,
+        >,
+    >,
 }
 
 /// LoRa radio-related peripherals
@@ -80,4 +85,3 @@ pub fn init_board(p: embassy_nrf::Peripherals) -> BoardPeripherals {
     feature = "board-wisblock-rak4631"
 )))]
 compile_error!("No board selected! Please enable a board feature like 'board-seeed-xiao-nrf52840'");
-
