@@ -9,6 +9,8 @@ use embassy_rp::i2c;
 use embassy_rp::peripherals;
 use embassy_rp::spi;
 use embassy_rp::usb;
+use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+use embassy_sync::mutex::Mutex;
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
 
@@ -27,7 +29,12 @@ pub struct BoardPeripherals {
     /// Random number generator
     pub rng: clocks::RoscRng,
     /// I2C bus config
-    pub i2c: Option<i2c::I2c<'static, peripherals::I2C0, i2c::Async>>,
+    pub i2c: Option<
+        &'static mut Mutex<
+            NoopRawMutex,
+            embassy_rp::i2c::I2c<'static, peripherals::I2C0, embassy_rp::i2c::Async>,
+        >,
+    >,
 }
 
 /// LoRa radio-related peripherals

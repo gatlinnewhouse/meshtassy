@@ -1,7 +1,10 @@
 use bosch_bme680::{AsyncBme680, BmeError};
 use defmt::*;
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
-use embassy_rp::{peripherals::TWISPI1, twim::Twim};
+use embassy_rp::{
+    i2c::{Async, I2c},
+    peripherals::I2C0,
+};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_time::Delay;
 use femtopb::UnknownFields;
@@ -33,12 +36,12 @@ pub trait EnvironmentData {
 }
 
 /// Alias BME typedef for shorter name
-type BME<'dev> = AsyncBme680<I2cDevice<'dev, NoopRawMutex, Twim<'dev, TWISPI1>>, Delay>;
+type BME<'dev> = AsyncBme680<I2cDevice<'dev, NoopRawMutex, I2c<'dev, I2C0, Async>>, Delay>;
 /// Implement the dummy trait on the BME struct
 impl<'dev> CrateSensor for BME<'dev> {}
 
 /// Alias BME Error typeddef for shorter name
-type BMEError<'dev> = BmeError<I2cDevice<'dev, NoopRawMutex, Twim<'dev, TWISPI1>>>;
+type BMEError<'dev> = BmeError<I2cDevice<'dev, NoopRawMutex, I2c<'dev, I2C0, Async>>>;
 /// Implement the dummy trait on the BMEError struct
 impl<'dev> CrateError for BMEError<'dev> {}
 /// Implement defmt for the remote crate error struct
@@ -107,55 +110,65 @@ impl EnvironmentData for TelemetrySensor<BME<'static>> {
 }
 
 /// Alias SCD30 typedef for shorter name
-type SCD30<'dev> = Scd30<I2cDevice<'dev, NoopRawMutex, Twim<'dev, TWISPI1>>, Delay>;
+type SCD30<'dev> = Scd30<I2cDevice<'dev, NoopRawMutex, I2c<'dev, I2C0, Async>>, Delay>;
 impl<'dev> CrateSensor for SCD30<'dev> {}
 
 /// Implement EnvironmentData for SCD30
 impl EnvironmentData for TelemetrySensor<SCD30<'static>> {
     async fn setup(&mut self) {
         // not much is required initially here. perhaps eventually this runs the calibration routine
+        info!("Setting up SCD30");
     }
     async fn get_metrics(&mut self) -> Option<EnvironmentMetrics<'_>> {
-        if self.device.data_ready().await.is_ok_and(|b| b == true) {
-            match self.device.read_measurement().await {
-                Ok(data) => {
-                    info!(
-                        "SCD30 get_metrics()\n\t\t Temperature: {:?}\n\t\t Humidity: {:?}",
-                        data.temperature, data.humidity
-                    );
-                    Some(EnvironmentMetrics {
-                        temperature: Some(data.temperature),
-                        relative_humidity: Some(data.humidity),
-                        barometric_pressure: None,
-                        gas_resistance: None,
-                        voltage: None,
-                        current: None,
-                        iaq: None,
-                        distance: None,
-                        lux: None,
-                        white_lux: None,
-                        ir_lux: None,
-                        uv_lux: None,
-                        wind_direction: None,
-                        wind_speed: None,
-                        weight: None,
-                        wind_gust: None,
-                        wind_lull: None,
-                        radiation: None,
-                        rainfall_1h: None,
-                        rainfall_24h: None,
-                        soil_moisture: None,
-                        soil_temperature: None,
-                        unknown_fields: UnknownFields::default(),
-                    })
-                }
-                Err(e) => {
-                    error!("Could not get measurements from SCD30: {:?}", e);
+        match self.device.data_ready().await {
+            Ok(ready) => {
+                if ready {
+                    match self.device.read_measurement().await {
+                        Ok(data) => {
+                            info!(
+                                "SCD30 get_metrics()\n\t\t Temperature: {:?}\n\t\t Humidity: {:?}",
+                                data.temperature, data.humidity
+                            );
+                            Some(EnvironmentMetrics {
+                                temperature: Some(data.temperature),
+                                relative_humidity: Some(data.humidity),
+                                barometric_pressure: None,
+                                gas_resistance: None,
+                                voltage: None,
+                                current: None,
+                                iaq: None,
+                                distance: None,
+                                lux: None,
+                                white_lux: None,
+                                ir_lux: None,
+                                uv_lux: None,
+                                wind_direction: None,
+                                wind_speed: None,
+                                weight: None,
+                                wind_gust: None,
+                                wind_lull: None,
+                                radiation: None,
+                                rainfall_1h: None,
+                                rainfall_24h: None,
+                                soil_moisture: None,
+                                soil_temperature: None,
+                                unknown_fields: UnknownFields::default(),
+                            })
+                        }
+                        Err(e) => {
+                            error!("Could not get measurements from SCD30: {:?}", e);
+                            None
+                        }
+                    }
+                } else {
+                    warn!("SCD30 data not ready yet");
                     None
                 }
             }
-        } else {
-            None
+            Err(e) => {
+                error!("SCD30 error querying data readiness: {:?}", e);
+                None
+            }
         }
     }
 }

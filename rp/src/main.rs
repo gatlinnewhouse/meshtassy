@@ -5,6 +5,7 @@ use core::u32;
 
 use crate::usb_framer::Framer;
 use defmt::*;
+use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_executor::Spawner;
 use embassy_rp::peripherals;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
@@ -89,8 +90,8 @@ async fn packet_processor_task() {
     }
 }
 
-//mod environmental_telemetry;
-//use crate::environmental_telemetry::{EnvironmentData, TelemetrySensor};
+mod environmental_telemetry;
+use crate::environmental_telemetry::{EnvironmentData, TelemetrySensor};
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
@@ -135,27 +136,26 @@ async fn main(spawner: Spawner) {
     //TODO: throw this in an embassy task that eventually scans a given i2c bus and configs the
     //sensors
     
-    // if let Some(i2c_bus) = board.i2c {
-    //     let i2c_dev1 = I2cDevice::new(i2c_bus);
-    //     let mut bme = TelemetrySensor {
-    //         device: bosch_bme680::AsyncBme680::new(
-    //             i2c_dev1,
-    //             bosch_bme680::DeviceAddress::Secondary,
-    //             Delay,
-    //             24, // wrong initial temperature, is it in C?
-    //         )
-    //     };
-    //     bme.setup().await;
-    //     //TODO: share the I2C struct between sensors
-    
-    //     let i2c_dev2 = I2cDevice::new(i2c_bus);
-    //     let mut scd30 = TelemetrySensor {
-    //         device: libscd::asynchronous::scd30::Scd30::new(i2c_dev2, Delay)
-    //     };
-    //     scd30.setup().await;
-    //     let metrics = scd30.get_metrics().await;
-    //     let metrics = bme.get_metrics().await;
-    // }
+    if let Some(i2c_bus) = board.i2c {
+        let i2c_dev1 = I2cDevice::new(i2c_bus);
+        let mut bme = TelemetrySensor {
+            device: bosch_bme680::AsyncBme680::new(
+                i2c_dev1,
+                bosch_bme680::DeviceAddress::Secondary,
+                Delay,
+                24, // wrong initial temperature, is it in C?
+            )
+        };
+        bme.setup().await;
+        //TODO: share the I2C struct between sensors
+        let i2c_dev2 = I2cDevice::new(i2c_bus);
+        let mut scd30 = TelemetrySensor {
+            device: libscd::asynchronous::scd30::Scd30::new(i2c_dev2, Delay)
+        };
+        scd30.setup().await;
+        let metrics = scd30.get_metrics().await;
+        let metrics = bme.get_metrics().await;
+    }
 
     // are we configured to use DIO2 as RF switch?  (This should be true for Sx1262)
     info!("Use dio2 as RFSwitch? {:?}", Sx1262.use_dio2_as_rfswitch());
