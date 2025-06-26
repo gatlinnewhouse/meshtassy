@@ -3,9 +3,11 @@
 //! This module provides board-specific abstractions that isolate
 //! hardware dependencies from the main application logic.
 
+use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_nrf::gpio::{Input, Output};
 use embassy_nrf::mode::Blocking;
 use embassy_nrf::spim::Spim;
+use embassy_nrf::twim::Twim;
 use embassy_nrf::{peripherals, rng, usb};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_time::Delay;
@@ -18,6 +20,9 @@ pub mod seeed_xiao_nrf52840;
 // Import board-specific modules based on features
 #[cfg(feature = "board-wisblock-rak4631")]
 pub mod wisblock_rak4631;
+
+/// Alias sensors on I2C bus
+pub type I2CSensor<'dev> = I2cDevice<'dev, NoopRawMutex, Twim<'dev, peripherals::TWISPI1>>;
 
 /// Board-specific peripheral configuration
 pub struct BoardPeripherals {

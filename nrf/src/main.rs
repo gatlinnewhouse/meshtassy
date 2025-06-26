@@ -36,6 +36,8 @@ use meshtastic_protobufs::meshtastic::{Data, FromRadio, MyNodeInfo, PortNum, ToR
 mod usb_framer;
 
 mod boards;
+mod sensors;
+mod environmental_telemetry;
 
 static PACKET_CHANNEL: PubSubChannel<CriticalSectionRawMutex, DecodedPacket, 8, 8, 1> =
     PubSubChannel::<CriticalSectionRawMutex, DecodedPacket, 8, 8, 1>::new();
@@ -91,9 +93,6 @@ async fn packet_processor_task() {
     }
 }
 
-mod environmental_telemetry;
-use crate::environmental_telemetry::{EnvironmentData, TelemetrySensor};
-
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let p = embassy_nrf::init(Default::default());
@@ -139,6 +138,9 @@ async fn main(spawner: Spawner) {
     //sensors
     info!("Try initializing a BME on the I2C bus");
     if let Some(i2c_bus) = board.i2c {
+        use crate::sensors::TelemetrySensor;
+        use crate::environmental_telemetry::EnvironmentData;
+
         let i2c_dev1 = I2cDevice::new(i2c_bus);
         let mut bme = TelemetrySensor {
             device: bosch_bme680::AsyncBme680::new(
