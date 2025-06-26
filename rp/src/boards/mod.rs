@@ -18,6 +18,9 @@ use embedded_hal_bus::spi::ExclusiveDevice;
 #[cfg(feature = "board-pico-rp2040")]
 pub mod raspberry_pi_pico;
 
+/// I2CBus type alias
+pub type I2CBus<'dev> = i2c::I2c<'dev, peripherals::I2C0, i2c::Async>;
+
 /// Board-specific peripheral configuration
 pub struct BoardPeripherals {
     /// LoRa radio peripherals and pins
@@ -29,12 +32,8 @@ pub struct BoardPeripherals {
     /// Random number generator
     pub rng: clocks::RoscRng,
     /// I2C bus config
-    pub i2c: Option<
-        &'static mut Mutex<
-            NoopRawMutex,
-            embassy_rp::i2c::I2c<'static, peripherals::I2C0, embassy_rp::i2c::Async>,
-        >,
-    >,
+    pub i2c:
+        Option<&'static mut Mutex<NoopRawMutex, i2c::I2c<'static, peripherals::I2C0, i2c::Async>>>,
 }
 
 /// LoRa radio-related peripherals

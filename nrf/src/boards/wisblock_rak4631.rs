@@ -2,8 +2,7 @@
 //!
 //! Pin assignments and peripheral configuration for RAK4631 on Wisblock 19003 (also an nrf52840).
 
-use super::{BoardPeripherals, LedPeripherals, LoRaPeripherals};
-use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
+use super::{BoardPeripherals, LoRaPeripherals};
 use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pull};
 use embassy_nrf::twim::Twim;
 use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;

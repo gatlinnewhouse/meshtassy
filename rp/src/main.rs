@@ -90,9 +90,6 @@ async fn packet_processor_task() {
     }
 }
 
-mod environmental_telemetry;
-use crate::environmental_telemetry::{EnvironmentData, TelemetrySensor};
-
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
@@ -137,21 +134,17 @@ async fn main(spawner: Spawner) {
     //sensors
     
     if let Some(i2c_bus) = board.i2c {
+        use meshtassy_telemetry::environmental_telemetry::EnvironmentData;
+        use meshtassy_telemetry::TelemetrySensor;
+        use meshtassy_telemetry::sensors::bme::BME;
+        use meshtassy_telemetry::sensors::scd30::SCD30;
+        use crate::boards::I2CBus;
+
         let i2c_dev1 = I2cDevice::new(i2c_bus);
-        let mut bme = TelemetrySensor {
-            device: bosch_bme680::AsyncBme680::new(
-                i2c_dev1,
-                bosch_bme680::DeviceAddress::Secondary,
-                Delay,
-                24, // wrong initial temperature, is it in C?
-            )
-        };
+        let mut bme = TelemetrySensor::<BME<'_, I2CBus>>::new(i2c_dev1);
         bme.setup().await;
-        //TODO: share the I2C struct between sensors
         let i2c_dev2 = I2cDevice::new(i2c_bus);
-        let mut scd30 = TelemetrySensor {
-            device: libscd::asynchronous::scd30::Scd30::new(i2c_dev2, Delay)
-        };
+        let mut scd30 = TelemetrySensor::<SCD30<'_, I2CBus>>::new(i2c_dev2);
         scd30.setup().await;
         let metrics = scd30.get_metrics().await;
         let metrics = bme.get_metrics().await;

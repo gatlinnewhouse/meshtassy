@@ -73,10 +73,6 @@ embedded-hal-bus = { version = "0.1", features = ["async"] }
 num-integer = { version = "0.1.45", default-features = false }
 microfft = "0.5.0"
 
-# Sensor crates, should probably be dependent on a config that enables/disables them?
-bosch-bme680 = { version = "1.0.4", features = ["embedded-hal-async"] }
-libscd = { version = "0.5.1", features = ["async", "defmt", "scd30"] }
-
 lora-phy = { git = "https://github.com/lora-rs/lora-rs.git", rev = "795dcc3add884ec389956c304c96308389779e1d", features = [
   "lorawan-radio",
   "defmt-03",
@@ -98,6 +94,7 @@ meshtastic-protobufs = { path = "../meshtastic-protobufs", version = "0.1.0", fe
 meshtassy-net = { path = "../meshtassy-net", version = "0.1.0", default-features = false, features = [
   "defmt",
 ] }
+meshtassy-telemetry = { path = "../meshtassy-telemetry", version = "0.1.0" }
 
 [features]
 default = ["board-wisblock-rak4631"]

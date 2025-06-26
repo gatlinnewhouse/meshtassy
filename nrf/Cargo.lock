@@ -1144,7 +1144,6 @@ dependencies = [
  "aes",
  "anyhow",
  "base64",
- "bosch-bme680",
  "cortex-m",
  "cortex-m-rt",
  "ctr",
@@ -1170,10 +1169,10 @@ dependencies = [
  "femtopb-build",
  "fixed",
  "heapless",
- "libscd",
  "lora-phy",
  "lorawan-device",
  "meshtassy-net",
+ "meshtassy-telemetry",
  "meshtastic-protobufs",
  "microfft",
  "num-integer",
@@ -1183,6 +1182,22 @@ dependencies = [
  "static_cell",
  "usbd-hid",
  "walkdir",
+]
+
+[[package]]
+name = "meshtassy-telemetry"
+version = "0.1.0"
+dependencies = [
+ "bosch-bme680",
+ "defmt 1.0.1",
+ "embassy-embedded-hal",
+ "embassy-sync",
+ "embassy-time 0.4.0 (git+https://github.com/embassy-rs/embassy.git?rev=5e49985ed678659e199c58c8100e3ed18d2f6227)",
+ "embedded-hal 1.0.0",
+ "embedded-hal-async",
+ "femtopb",
+ "libscd",
+ "meshtastic-protobufs",
 ]
 
 [[package]]

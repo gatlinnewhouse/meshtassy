@@ -36,8 +36,6 @@ use meshtastic_protobufs::meshtastic::{Data, FromRadio, MyNodeInfo, PortNum, ToR
 mod usb_framer;
 
 mod boards;
-mod sensors;
-mod environmental_telemetry;
 
 static PACKET_CHANNEL: PubSubChannel<CriticalSectionRawMutex, DecodedPacket, 8, 8, 1> =
     PubSubChannel::<CriticalSectionRawMutex, DecodedPacket, 8, 8, 1>::new();
@@ -136,26 +134,18 @@ async fn main(spawner: Spawner) {
     // Try initializing a BME
     //TODO: throw this in an embassy task that eventually scans a given i2c bus and configs the
     //sensors
-    info!("Try initializing a BME on the I2C bus");
     if let Some(i2c_bus) = board.i2c {
-        use crate::sensors::TelemetrySensor;
-        use crate::environmental_telemetry::EnvironmentData;
+        use meshtassy_telemetry::environmental_telemetry::EnvironmentData;
+        use meshtassy_telemetry::TelemetrySensor;
+        use meshtassy_telemetry::sensors::bme::BME;
+        use meshtassy_telemetry::sensors::scd30::SCD30;
+        use crate::boards::I2CBus;
 
         let i2c_dev1 = I2cDevice::new(i2c_bus);
-        let mut bme = TelemetrySensor {
-            device: bosch_bme680::AsyncBme680::new(
-                i2c_dev1,
-                bosch_bme680::DeviceAddress::Secondary,
-                Delay,
-                24, // wrong initial temperature, is it in C?
-            )
-        };
+        let mut bme = TelemetrySensor::<BME<'_, I2CBus>>::new(i2c_dev1);
         bme.setup().await;
-        //TODO: share the I2C struct between sensors
         let i2c_dev2 = I2cDevice::new(i2c_bus);
-        let mut scd30 = TelemetrySensor {
-            device: libscd::asynchronous::scd30::Scd30::new(i2c_dev2, Delay)
-        };
+        let mut scd30 = TelemetrySensor::<SCD30<'_, I2CBus>>::new(i2c_dev2);
         scd30.setup().await;
         let metrics = scd30.get_metrics().await;
         let metrics = bme.get_metrics().await;
