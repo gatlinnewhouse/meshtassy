@@ -1,18 +1,33 @@
 use defmt::*;
+use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
+use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_time::Delay;
+use embedded_hal::i2c::ErrorType;
+use embedded_hal_async::i2c::I2c;
 use femtopb::UnknownFields;
 use libscd::asynchronous::scd30::Scd30;
 use meshtastic_protobufs::meshtastic::EnvironmentMetrics;
 
-use crate::{
-    boards::I2CSensor, environmental_telemetry::EnvironmentData, sensors::TelemetrySensor,
-};
+use crate::{TelemetrySensor, environmental_telemetry::EnvironmentData};
 
 /// Alias SCD30 typedef for shorter name
-type SCD30<'dev> = Scd30<I2CSensor<'dev>, Delay>;
+#[allow(dead_code)]
+pub type SCD30<'dev, BUS> = Scd30<I2cDevice<'dev, NoopRawMutex, BUS>, Delay>;
+
+/// Implement TelemetrySensor on the BME
+impl<'dev, BUS: I2c + ErrorType + 'static> TelemetrySensor<SCD30<'dev, BUS>> {
+    pub fn new(bus: I2cDevice<'dev, NoopRawMutex, BUS>) -> Self {
+        Self {
+            device: Scd30::new(bus, Delay),
+        }
+    }
+}
 
 /// Implement EnvironmentData for SCD30
-impl EnvironmentData for TelemetrySensor<SCD30<'static>> {
+impl<BUS: I2c + ErrorType> EnvironmentData for TelemetrySensor<SCD30<'static, BUS>>
+where
+    <BUS as ErrorType>::Error: defmt::Format,
+{
     async fn setup(&mut self) {
         // not much is required initially here. perhaps eventually this runs the calibration routine
     }

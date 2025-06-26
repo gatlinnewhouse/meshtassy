@@ -1,8 +1,10 @@
-/// BME680 Sensor
-mod bme;
+#![no_std]
 
-/// SCD30 Sensor
-mod scd30;
+/// Sensor specific code
+pub mod sensors;
+
+/// Environmental Telemetry code
+pub mod environmental_telemetry;
 
 /// Proxy struct for remote device structs
 pub struct TelemetrySensor<T> {

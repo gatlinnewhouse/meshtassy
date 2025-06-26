@@ -1,25 +1,43 @@
 use bosch_bme680::{AsyncBme680, BmeError};
 use defmt::{Formatter, *};
+use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
+use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_time::Delay;
+use embedded_hal::i2c::ErrorType;
+use embedded_hal_async::i2c::I2c;
 use femtopb::UnknownFields;
 use meshtastic_protobufs::meshtastic::EnvironmentMetrics;
 
-use crate::{
-    boards::I2CSensor,
-    environmental_telemetry::EnvironmentData,
-    sensors::{RemoteError, TelemetrySensor},
-};
+use crate::{RemoteError, TelemetrySensor, environmental_telemetry::EnvironmentData};
 
 /// Alias BME typedef for shorter name
-type BME<'dev> = AsyncBme680<I2CSensor<'dev>, Delay>;
+pub type BME<'dev, BUS> = AsyncBme680<I2cDevice<'dev, NoopRawMutex, BUS>, Delay>;
 
 /// Alias BME Error typeddef for shorter name
-type BMEError<'dev> = BmeError<I2CSensor<'dev>>;
+#[allow(dead_code)]
+type BMEError<'dev, BUS> = BmeError<I2cDevice<'dev, NoopRawMutex, BUS>>;
+
+/// Implement TelemetrySensor on the BME
+impl<'dev, BUS: I2c + ErrorType + 'static> TelemetrySensor<BME<'dev, BUS>> {
+    pub fn new(bus: I2cDevice<'dev, NoopRawMutex, BUS>) -> Self {
+        Self {
+            device: bosch_bme680::AsyncBme680::new(
+                bus,
+                bosch_bme680::DeviceAddress::Secondary,
+                Delay,
+                24, // wrong initial temperature, is it in C?
+            ),
+        }
+    }
+}
 
 /// Implement defmt for the remote crate error struct
-impl defmt::Format for RemoteError<BMEError<'_>> {
+impl<BUS: I2c + ErrorType> defmt::Format for RemoteError<BMEError<'_, BUS>>
+where
+    <BUS as ErrorType>::Error: defmt::Format,
+{
     fn format(&self, fmt: Formatter) {
-        match self.error {
+        match &self.error {
             BmeError::WriteError(e) => defmt::write!(fmt, "Write Error: {:#?}", e),
             BmeError::WriteReadError(e) => defmt::write!(fmt, "Write Read Error: {:#?}", e),
             BmeError::UnexpectedChipId(e) => defmt::write!(fmt, "Unexpected Chip ID: {}", e),
@@ -30,13 +48,16 @@ impl defmt::Format for RemoteError<BMEError<'_>> {
 }
 
 /// Implement EnvironmentData for BME
-impl EnvironmentData for TelemetrySensor<BME<'static>> {
+impl<BUS: I2c + ErrorType> EnvironmentData for TelemetrySensor<BME<'static, BUS>>
+where
+    <BUS as embedded_hal::i2c::ErrorType>::Error: defmt::Format,
+{
     async fn setup(&mut self) {
         let cfg = bosch_bme680::Configuration::default();
         match self.device.initialize(&cfg).await {
             Ok(_) => info!("BME680 Configured"),
             Err(e) => {
-                let re = RemoteError::<BMEError> { error: e };
+                let re = RemoteError::<BMEError<BUS>> { error: e };
                 error!("Error configuring BME680: {:?}", re)
             }
         }
@@ -45,7 +66,10 @@ impl EnvironmentData for TelemetrySensor<BME<'static>> {
         match self.device.measure().await {
             Ok(data) => {
                 //TODO: a macro for multiline info messages to make this less annoying
-                info!("BME680 get_metrics()\n\t\t Temperature: {:?}\n\t\t Humidity: {:?}\n\t\t Pressure: {:?}\n\t\t Gas Resistance: {:?}\n\t\t IAQ: N/A", data.temperature, data.humidity, data.pressure, data.gas_resistance);
+                info!(
+                    "BME680 get_metrics()\n\t\t Temperature: {:?}\n\t\t Humidity: {:?}\n\t\t Pressure: {:?}\n\t\t Gas Resistance: {:?}\n\t\t IAQ: N/A",
+                    data.temperature, data.humidity, data.pressure, data.gas_resistance
+                );
                 Some(EnvironmentMetrics {
                     temperature: Some(data.temperature),
                     relative_humidity: Some(data.humidity),
@@ -73,7 +97,7 @@ impl EnvironmentData for TelemetrySensor<BME<'static>> {
                 })
             }
             Err(e) => {
-                let re = RemoteError::<BMEError> { error: e };
+                let re = RemoteError::<BMEError<BUS>> { error: e };
                 error!("Error fetching data from BME: {:?}", re);
                 None
             }
