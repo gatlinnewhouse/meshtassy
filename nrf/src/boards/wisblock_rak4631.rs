@@ -1,6 +1,7 @@
-//! Example board template - copy this file and modify for your board
+//! RAK4631 on Wisblock 19003
 //!
-//! Pin assignments and peripheral configuration for RAK4631 on Wisblock 19003 (also an nrf52840).
+//! Pin assignments and peripheral configuration for the RAK4631
+//! on a Wisblock 19003
 
 use super::{BoardPeripherals, LoRaPeripherals};
 use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pull};
