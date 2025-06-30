@@ -25,7 +25,7 @@ use {defmt_rtt as _, panic_probe as _};
 use embassy_futures::join::join;
 use embassy_futures::select::{select, Either};
 use embassy_rp::usb::{Driver, Instance};
-use embassy_usb::driver::{EndpointError};
+use embassy_usb::driver::EndpointError;
 use embassy_usb::{Builder, Config};
 
 use meshtassy_net::header::HeaderFlags;
@@ -50,7 +50,6 @@ static PACKET_ID_COUNTER: Mutex<CriticalSectionRawMutex, u32> = Mutex::new(1);
 // USB static allocations for Embassy's Forever pattern
 static CONFIG_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
 static BOS_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
-static MSOS_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
 static CONTROL_BUF: StaticCell<[u8; 64]> = StaticCell::new();
 static STATE: StaticCell<State> = StaticCell::new();
 
@@ -132,7 +131,7 @@ async fn main(spawner: Spawner) {
     // Try initializing a BME
     //TODO: throw this in an embassy task that eventually scans a given i2c bus and configs the
     //sensors
-    
+
     if let Some(i2c_bus) = board.i2c {
         use meshtassy_telemetry::environmental_telemetry::EnvironmentData;
         use meshtassy_telemetry::TelemetrySensor;
@@ -146,8 +145,8 @@ async fn main(spawner: Spawner) {
         let i2c_dev2 = I2cDevice::new(i2c_bus);
         let mut scd30 = TelemetrySensor::<SCD30<'_, I2CBus>>::new(i2c_dev2);
         scd30.setup().await;
-        let metrics = scd30.get_metrics().await;
-        let metrics = bme.get_metrics().await;
+        let _metrics = scd30.get_metrics().await;
+        let _metrics = bme.get_metrics().await;
     }
 
     // are we configured to use DIO2 as RF switch?  (This should be true for Sx1262)
@@ -158,7 +157,7 @@ async fn main(spawner: Spawner) {
         tcxo_ctrl: Some(TcxoCtrlVoltage::Ctrl1V7),
         use_dcdc: true,
         rx_boost: true,
-    };    
+    };
     let iv = GenericSx126xInterfaceVariant::new(reset, dio1, busy, None, None).unwrap();
     let radio = Sx126x::new(spi, iv, config);    
     let mut lora = LoRa::with_syncword(radio, LORA_SYNCWORD, Delay)
@@ -176,7 +175,8 @@ async fn main(spawner: Spawner) {
         info!("LEDs initialized");
     } else {
         info!("No LEDs available on this board");
-    }// Spawn the packet processor task
+    }
+    // Spawn the packet processor task
     spawner.spawn(packet_processor_task()).unwrap();
 
     // Spawn the USB serial task
@@ -235,7 +235,7 @@ async fn main(spawner: Spawner) {
         }    };
     let mut rng = board.rng;
     let mut bytes = [0u8; 4];
-    //rng.blocking_fill_bytes(&mut bytes); <- unavailable here and RoscRNG may be wrong
+    rng.fill_bytes(&mut bytes);
     let tx_packet_id = u32::from_le_bytes(bytes); // Create the transmission header
     let tx_header = Header {
         source: 0xDEADBEEF,
