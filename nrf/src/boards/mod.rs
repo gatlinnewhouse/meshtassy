@@ -8,7 +8,7 @@ use embassy_nrf::mode::Blocking;
 use embassy_nrf::spim::Spim;
 use embassy_nrf::twim::Twim;
 use embassy_nrf::{peripherals, rng, usb};
-use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
 
@@ -37,7 +37,7 @@ pub struct BoardPeripherals {
     /// I2C bus config
     pub i2c: Option<
         &'static mut embassy_sync::mutex::Mutex<
-            NoopRawMutex,
+            CriticalSectionRawMutex,
             embassy_nrf::twim::Twim<'static, peripherals::TWISPI1>,
         >,
     >,

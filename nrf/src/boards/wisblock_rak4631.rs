@@ -7,7 +7,7 @@ use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pull};
 use embassy_nrf::twim::Twim;
 use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;
 use embassy_nrf::{bind_interrupts, pac, peripherals, rng, spim, twim, usb};
-use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
@@ -57,8 +57,9 @@ pub fn init_board(p: embassy_nrf::Peripherals) -> BoardPeripherals {
 
     // Configure the I2C bus for sensors
     static RAM_BUFFER: ConstStaticCell<[u8; 16]> = ConstStaticCell::new([0; 16]);
-    static I2C_BUS: StaticCell<Mutex<NoopRawMutex, Twim<'_, embassy_nrf::peripherals::TWISPI1>>> =
-        StaticCell::new();
+    static I2C_BUS: StaticCell<
+        Mutex<CriticalSectionRawMutex, Twim<'_, embassy_nrf::peripherals::TWISPI1>>,
+    > = StaticCell::new();
     let i2c_config = twim::Config::default();
     let i2c = Twim::new(
         p.TWISPI1,
