@@ -846,8 +846,8 @@ fn create_node_info_packet(packet_id: u32) -> FromRadio<'static> {
 
     let user = User {
         id: "!deadbeef", // Use the same node ID as in MyNodeInfo
-        long_name: "Embassy NRF52",
-        short_name: "ENRF",
+        long_name: "Embassy RP2040",
+        short_name: "ERP2",
         macaddr: &[], // Deprecated field
         hw_model: femtopb::EnumValue::Known(HardwareModel::Unset),
         is_licensed: false,
