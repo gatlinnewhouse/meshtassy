@@ -1,70 +1,72 @@
 //! Example board template - copy this file and modify for your board
-//! 
+//!
 //! Pin assignments and peripheral configuration for [YOUR BOARD NAME].
 
-use super::{BoardPeripherals, LoRaPeripherals, LedPeripherals};
-use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pull};
-use embassy_nrf::{bind_interrupts, pac, peripherals, rng, spim, usb};
-use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;
+use super::{BoardPeripherals, LoRaPeripherals};
+use embassy_rp::gpio::{Input, Level, Output, Pull};
+use embassy_rp::{bind_interrupts, i2c, peripherals, spi, usb};
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::mutex::Mutex;
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
+use static_cell::StaticCell;
 
 bind_interrupts!(struct Irqs {
-    TWISPI0 => spim::InterruptHandler<peripherals::TWISPI0>;
-    RNG => rng::InterruptHandler<peripherals::RNG>;
-    USBD => usb::InterruptHandler<peripherals::USBD>;
-    CLOCK_POWER => usb::vbus_detect::InterruptHandler;
+    I2C0_IRQ => i2c::InterruptHandler<peripherals::I2C0>;
+    USBCTRL_IRQ => usb::InterruptHandler<peripherals::USB>;
 });
 
 /// Pin assignments for [YOUR BOARD NAME]
-/// 
-/// TODO: Document your board's pin assignments here
-/// 
-/// LoRa Radio (SX126x):
-/// - NSS (Chip Select): P0_XX
-/// - Reset: P0_XX
-/// - DIO1: P0_XX
-/// - Busy: P0_XX
-/// - SPI: TWISPI0 (SCK: P1_XX, MISO: P1_XX, MOSI: P1_XX)
 ///
-/// LEDs:
-/// - Red: P0_XX
-/// - Green: P0_XX
-/// - Blue: P0_XX
-pub fn init_board(p: embassy_nrf::Peripherals) -> BoardPeripherals {
-    // Initialize external high-frequency oscillator for USB
-    pac::CLOCK.tasks_hfclkstart().write_value(1);
-    while pac::CLOCK.events_hfclkstarted().read() != 1 {}
-
-    // Configure LoRa radio pins
+/// TODO: Document your board's pin assignments here
+///
+/// LoRa Radio (ANY HAT USED?):
+/// - NSS (Chip Select): PIN_X
+/// - Reset: PIN_X
+/// - DIO1: PIN_X
+/// - Busy: PIN_X
+/// - SPI: SPIX (SCK: PIN_X, MISO: PIN_X, MOSI: PIN_X, TX_DMA: DMA_CHX, RX_DMA: DMA_CHX)
+/// - I2C: (I2CX SCL: PIN_X, SDA: PIN_X)
+///
+/// This board has no user-controllable LEDs
+pub fn init_board(p: embassy_rp::Peripherals) -> BoardPeripherals {
+    // Configure LoRa radio pins (replace with actual pins for your board)
     // TODO: Update these pin assignments for your board
-    let nss = Output::new(p.P0_04, Level::High, OutputDrive::Standard);    // CS pin
-    let reset = Output::new(p.P0_28, Level::High, OutputDrive::Standard);  // Reset pin
-    let dio1 = Input::new(p.P0_03, Pull::Down);                           // DIO1 pin
-    let busy = Input::new(p.P0_29, Pull::None);                           // Busy pin
+    let nss = Output::new(p.PIN_3, Level::High);
+    let reset = Output::new(p.PIN_15, Level::High);
+    let dio1 = Input::new(p.PIN_20, Pull::Down);
+    let busy = Input::new(p.PIN_2, Pull::None);
 
-    // Configure SPI for LoRa radio
+    // Configure SPI for LoRa radio (replace with actual pins for your board)
     // TODO: Update these pin assignments for your board
-    let mut spi_config = spim::Config::default();
-    spi_config.frequency = spim::Frequency::M16;
-    let spi_sck = p.P1_13;   // SCK pin
-    let spi_miso = p.P1_14;  // MISO pin
-    let spi_mosi = p.P1_15;  // MOSI pin
-    let spim = spim::Spim::new(p.TWISPI0, Irqs, spi_sck, spi_miso, spi_mosi, spi_config);
-    let spi = ExclusiveDevice::new(spim, nss, Delay);
-
-    // Configure LEDs
-    // TODO: Update these pin assignments for your board
-    // Note: Adjust Level::High/Low based on whether your LEDs are active high or low
-    let led_red = Output::new(p.P0_26, Level::High, OutputDrive::Standard);
-    let led_green = Output::new(p.P0_30, Level::High, OutputDrive::Standard);
-    let led_blue = Output::new(p.P0_06, Level::High, OutputDrive::Standard);
+    let spi_config = spi::Config::default();
+    let spi_sck = p.PIN_10;
+    let spi_miso = p.PIN_12;
+    let spi_mosi = p.PIN_11;
+    let spi_tx_dma = p.DMA_CH0;
+    let spi_rx_dma = p.DMA_CH1;
+    let spi_dev = spi::Spi::new(
+        p.SPI1, spi_sck, spi_mosi, spi_miso, spi_tx_dma, spi_rx_dma, spi_config,
+    );
+    let spi = ExclusiveDevice::new(spi_dev, nss, Delay);
 
     // Configure USB driver
-    let usb_driver = usb::Driver::new(p.USBD, Irqs, HardwareVbusDetect::new(Irqs));
+    let usb_driver = usb::Driver::new(p.USB, Irqs);
 
     // Configure RNG
-    let rng = rng::Rng::new_blocking(p.RNG);
+    //TODO: investigate actual solution as this amy be wrong
+    let rng = embassy_rp::clocks::RoscRng;
+
+    // I2C bus config
+    // TODO: Update these pin assignments for your board
+    let i2c_config = i2c::Config::default();
+    let i2c_scl = p.PIN_5;
+    let i2c_sda = p.PIN_4;
+    static I2C_BUS: StaticCell<
+        Mutex<CriticalSectionRawMutex, i2c::I2c<'static, peripherals::I2C0, i2c::Async>>,
+    > = StaticCell::new();
+    let i2c = i2c::I2c::new_async(p.I2C0, i2c_scl, i2c_sda, Irqs, i2c_config);
+    let i2c_bus = I2C_BUS.init(Mutex::new(i2c));
 
     BoardPeripherals {
         lora: LoRaPeripherals {
@@ -73,12 +75,9 @@ pub fn init_board(p: embassy_nrf::Peripherals) -> BoardPeripherals {
             dio1,
             busy,
         },
-        leds: LedPeripherals {
-            red: led_red,
-            green: led_green,
-            blue: led_blue,
-        },
+        leds: None, // This board has no LEDs
         usb_driver,
         rng,
+        i2c: Some(i2c_bus),
     }
 }

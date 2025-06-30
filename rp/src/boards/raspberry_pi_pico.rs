@@ -1,7 +1,7 @@
-//! Template board configuration without LEDs
+//! Raspberry Pi Pico with Pico-LoRa-SX1262 HAT
 //!
-//! This is an example template for boards that don't have user-controllable LEDs.
-//! Copy this file and modify the pin assignments for your specific board.
+//! Pin assignments and peripheral configuration for the Raspberry Pi
+//! Pico with Pico-LoRa-SX1262 HAT
 
 use super::{BoardPeripherals, LoRaPeripherals};
 use embassy_rp::gpio::{Input, Level, Output, Pull};
