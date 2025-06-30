@@ -29,7 +29,9 @@ use embassy_usb::{Builder, Config};
 use meshtassy_net::header::HeaderFlags;
 use meshtassy_net::key::ChannelKey;
 use meshtassy_net::{DecodedPacket, Decrypted, Encrypted, Header, Packet};
-use meshtastic_protobufs::meshtastic::{Data, FromRadio, MyNodeInfo, PortNum, ToRadio, NodeInfo, User};
+use meshtastic_protobufs::meshtastic::{
+    Data, FromRadio, MyNodeInfo, NodeInfo, PortNum, ToRadio, User,
+};
 mod usb_framer;
 
 mod boards;
@@ -93,7 +95,7 @@ async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
 
     // Initialize board-specific peripherals
-    let board = boards::init_board(p);    // USB
+    let board = boards::init_board(p); // USB
     let driver = board.usb_driver;
 
     let mut config = Config::new(0xc0de, 0xcafe);
@@ -133,11 +135,11 @@ async fn main(spawner: Spawner) {
     //sensors
 
     if let Some(i2c_bus) = board.i2c {
+        use crate::boards::I2CBus;
         use meshtassy_telemetry::environmental_telemetry::EnvironmentData;
-        use meshtassy_telemetry::TelemetrySensor;
         use meshtassy_telemetry::sensors::bme::BME;
         use meshtassy_telemetry::sensors::scd30::SCD30;
-        use crate::boards::I2CBus;
+        use meshtassy_telemetry::TelemetrySensor;
 
         let i2c_dev1 = I2cDevice::new(i2c_bus);
         let mut bme = TelemetrySensor::<BME<'_, I2CBus>>::new(i2c_dev1);
@@ -159,7 +161,7 @@ async fn main(spawner: Spawner) {
         rx_boost: true,
     };
     let iv = GenericSx126xInterfaceVariant::new(reset, dio1, busy, None, None).unwrap();
-    let radio = Sx126x::new(spi, iv, config);    
+    let radio = Sx126x::new(spi, iv, config);
     let mut lora = LoRa::with_syncword(radio, LORA_SYNCWORD, Delay)
         .await
         .unwrap();
@@ -169,9 +171,9 @@ async fn main(spawner: Spawner) {
         let mut led_red = leds.red;
         let mut led_green = leds.green;
         let mut led_blue = leds.blue;
-        led_green.set_low();  // Turn on green LED (active low)
-        led_blue.set_low();   // Turn on blue LED (active low)
-        led_red.set_low();    // Turn on red LED (active low)
+        led_green.set_low(); // Turn on green LED (active low)
+        led_blue.set_low(); // Turn on blue LED (active low)
+        led_red.set_low(); // Turn on red LED (active low)
         info!("LEDs initialized");
     } else {
         info!("No LEDs available on this board");
@@ -232,7 +234,8 @@ async fn main(spawner: Spawner) {
                 info!("Radio error = {}", err);
                 return;
             }
-        }    };
+        }
+    };
     let mut rng = board.rng;
     let mut bytes = [0u8; 4];
     rng.fill_bytes(&mut bytes);
@@ -518,7 +521,6 @@ fn create_text_message_packet(
     }
 }
 
-
 struct Disconnected {}
 
 impl From<EndpointError> for Disconnected {
@@ -610,7 +612,7 @@ async fn packet_forwarder<'d, T: Instance + 'd>(
                     match decoded_packet.payload_variant {
                         Some(meshtastic_protobufs::meshtastic::to_radio::PayloadVariant::WantConfigId(config_id)) => {
                             info!("Client requesting config with ID: {}", config_id);
-                            
+
                             // Send MyNodeInfo packet
                             let packet_id = get_next_packet_id().await;
                             let from_radio_packet = create_my_node_info_packet(packet_id);
@@ -626,7 +628,7 @@ async fn packet_forwarder<'d, T: Instance + 'd>(
                                 if let Some(ref database) = *db_guard {
                                     let node_count = database.get_nodes().count();
                                     info!("Sending NodeInfo for {} nodes from database", node_count);
-                                    
+
                                     for node in database.get_nodes() {
                                         // Skip our own node (already sent above)
                                         if node.num != 0xDEADBEEF {
@@ -688,32 +690,45 @@ async fn packet_forwarder<'d, T: Instance + 'd>(
                 // Check packet type and forward real-time updates to USB client
                 match packet.port_num() {
                     femtopb::EnumValue::Known(PortNum::NodeinfoApp) => {
-                        info!("Received NodeInfo packet from node {}, forwarding to client", packet.header.source);
-                        
+                        info!(
+                            "Received NodeInfo packet from node {}, forwarding to client",
+                            packet.header.source
+                        );
+
                         // Try to get the node from the database and send a NodeInfo packet
                         if let Ok(db_guard) = NODE_DATABASE.try_lock() {
                             if let Some(ref database) = *db_guard {
                                 if let Some(node) = database.get_node(packet.header.source) {
                                     // Generate a unique packet ID for this real-time NodeInfo update
                                     let packet_id = get_next_packet_id().await;
-                                    let from_radio_packet = create_node_info_packet_from_db(packet_id, node);
-                                    
+                                    let from_radio_packet =
+                                        create_node_info_packet_from_db(packet_id, node);
+
                                     let mut encoded_buffer = [0u8; 256];
-                                    if let Err(_) = send_packet_to_usb(class, &from_radio_packet, &mut encoded_buffer).await {
+                                    if let Err(_) = send_packet_to_usb(
+                                        class,
+                                        &from_radio_packet,
+                                        &mut encoded_buffer,
+                                    )
+                                    .await
+                                    {
                                         info!("Failed to send NodeInfo packet to USB");
                                     } else {
-                                        info!("Successfully sent NodeInfo packet for node {} to USB", packet.header.source);
+                                        info!(
+                                            "Successfully sent NodeInfo packet for node {} to USB",
+                                            packet.header.source
+                                        );
                                     }
                                 }
                             }
                         }
-                    },
-                    femtopb::EnumValue::Known(PortNum::PositionApp) |
-                    femtopb::EnumValue::Known(PortNum::TelemetryApp) |
-                    femtopb::EnumValue::Known(PortNum::TextMessageApp) |
-                    femtopb::EnumValue::Known(PortNum::RoutingApp) |
-                    femtopb::EnumValue::Known(PortNum::TracerouteApp) |
-                    femtopb::EnumValue::Known(PortNum::NeighborinfoApp) => {
+                    }
+                    femtopb::EnumValue::Known(PortNum::PositionApp)
+                    | femtopb::EnumValue::Known(PortNum::TelemetryApp)
+                    | femtopb::EnumValue::Known(PortNum::TextMessageApp)
+                    | femtopb::EnumValue::Known(PortNum::RoutingApp)
+                    | femtopb::EnumValue::Known(PortNum::TracerouteApp)
+                    | femtopb::EnumValue::Known(PortNum::NeighborinfoApp) => {
                         let port_name = match packet.port_num() {
                             femtopb::EnumValue::Known(PortNum::PositionApp) => "Position",
                             femtopb::EnumValue::Known(PortNum::TelemetryApp) => "Telemetry",
@@ -723,22 +738,36 @@ async fn packet_forwarder<'d, T: Instance + 'd>(
                             femtopb::EnumValue::Known(PortNum::NeighborinfoApp) => "Neighbor Info",
                             _ => "Unknown", // This should never happen due to the match above
                         };
-                        
-                        info!("Received {} packet from node {}, forwarding to client", port_name, packet.header.source);
-                        
+
+                        info!(
+                            "Received {} packet from node {}, forwarding to client",
+                            port_name, packet.header.source
+                        );
+
                         // Create a generic MeshPacket FromRadio packet with the received data
                         let packet_id = get_next_packet_id().await;
-                        if let Some(from_radio_packet) = create_mesh_packet_from_data(packet_id, &packet) {
+                        if let Some(from_radio_packet) =
+                            create_mesh_packet_from_data(packet_id, &packet)
+                        {
                             let mut encoded_buffer = [0u8; 256];
-                            if let Err(_) = send_packet_to_usb(class, &from_radio_packet, &mut encoded_buffer).await {
+                            if let Err(_) =
+                                send_packet_to_usb(class, &from_radio_packet, &mut encoded_buffer)
+                                    .await
+                            {
                                 info!("Failed to send {} packet to USB", port_name);
                             } else {
-                                info!("Successfully sent {} packet for node {} to USB", port_name, packet.header.source);
+                                info!(
+                                    "Successfully sent {} packet for node {} to USB",
+                                    port_name, packet.header.source
+                                );
                             }
                         } else {
-                            info!("Failed to create {} packet for node {}, skipping", port_name, packet.header.source);
+                            info!(
+                                "Failed to create {} packet for node {}, skipping",
+                                port_name, packet.header.source
+                            );
                         }
-                    },
+                    }
                     _ => {
                         // For other packet types, we don't forward them as FromRadio packets
                     }
@@ -752,10 +781,7 @@ async fn packet_forwarder<'d, T: Instance + 'd>(
 // This task will manage the USB serial interface for debugging and communication
 #[embassy_executor::task]
 async fn usb_serial_task(
-    mut usb: embassy_usb::UsbDevice<
-        'static,
-        Driver<'static, peripherals::USB>,
-    >,
+    mut usb: embassy_usb::UsbDevice<'static, Driver<'static, peripherals::USB>>,
     mut cdc: CdcAcmClass<'static, Driver<'static, peripherals::USB>>,
 ) {
     info!("Starting USB serial task");
@@ -787,7 +813,11 @@ async fn get_next_packet_id() -> u32 {
     let current_id = *counter_guard;
     // Wrap at 0x7FFFFFFF to avoid potential issues with large values
     // and to leave room for expansion
-    *counter_guard = if current_id >= 0x7FFFFFFF { 1 } else { current_id + 1 };
+    *counter_guard = if current_id >= 0x7FFFFFFF {
+        1
+    } else {
+        current_id + 1
+    };
     current_id
 }
 
@@ -813,30 +843,30 @@ fn create_my_node_info_packet(packet_id: u32) -> FromRadio<'static> {
 /// Create a FromRadio packet containing NodeInfo for our own node
 fn create_node_info_packet(packet_id: u32) -> FromRadio<'static> {
     use meshtastic_protobufs::meshtastic::{config, HardwareModel};
-    
+
     let user = User {
-        id: "!deadbeef",  // Use the same node ID as in MyNodeInfo
+        id: "!deadbeef", // Use the same node ID as in MyNodeInfo
         long_name: "Embassy NRF52",
         short_name: "ENRF",
-        macaddr: &[],  // Deprecated field
+        macaddr: &[], // Deprecated field
         hw_model: femtopb::EnumValue::Known(HardwareModel::Unset),
         is_licensed: false,
         role: femtopb::EnumValue::Known(config::device_config::Role::Client),
-        public_key: &[],  // No public key for now
+        public_key: &[], // No public key for now
         is_unmessagable: Some(false),
         unknown_fields: Default::default(),
     };
 
     let node_info = NodeInfo {
-        num: 0xDEADBEEF,  // Same as MyNodeInfo.my_node_num
+        num: 0xDEADBEEF, // Same as MyNodeInfo.my_node_num
         user: Some(user),
-        position: None,  // No position info for now
+        position: None, // No position info for now
         snr: 0.0,
-        last_heard: 0,  // Current timestamp would be better
+        last_heard: 0, // Current timestamp would be better
         device_metrics: None,
         channel: 0,
         via_mqtt: false,
-        hops_away: Some(0),  // We are 0 hops from ourselves
+        hops_away: Some(0), // We are 0 hops from ourselves
         is_favorite: false,
         is_ignored: false,
         is_key_manually_verified: false,
@@ -868,8 +898,8 @@ fn create_config_complete_packet(packet_id: u32, config_complete_id: u32) -> Fro
 
 /// Create a FromRadio packet containing Config with minimal placeholder data
 fn create_config_packet(packet_id: u32) -> FromRadio<'static> {
-    use meshtastic_protobufs::meshtastic::{Config, config};
-    
+    use meshtastic_protobufs::meshtastic::{config, Config};
+
     let device_config = config::DeviceConfig {
         role: femtopb::EnumValue::Known(config::device_config::Role::Client),
         serial_enabled: false,
@@ -901,8 +931,8 @@ fn create_config_packet(packet_id: u32) -> FromRadio<'static> {
 
 /// Create a FromRadio packet containing ModuleConfig with minimal placeholder data
 fn create_module_config_packet(packet_id: u32) -> FromRadio<'static> {
-    use meshtastic_protobufs::meshtastic::{ModuleConfig, module_config};
-    
+    use meshtastic_protobufs::meshtastic::{module_config, ModuleConfig};
+
     let mqtt_config = module_config::MqttConfig {
         enabled: false,
         address: "",
@@ -926,7 +956,9 @@ fn create_module_config_packet(packet_id: u32) -> FromRadio<'static> {
     FromRadio {
         id: packet_id,
         payload_variant: Some(
-            meshtastic_protobufs::meshtastic::from_radio::PayloadVariant::ModuleConfig(module_config),
+            meshtastic_protobufs::meshtastic::from_radio::PayloadVariant::ModuleConfig(
+                module_config,
+            ),
         ),
         unknown_fields: Default::default(),
     }
@@ -934,11 +966,11 @@ fn create_module_config_packet(packet_id: u32) -> FromRadio<'static> {
 
 /// Create a FromRadio packet containing Channel with minimal placeholder data
 fn create_channel_packet(packet_id: u32) -> FromRadio<'static> {
-    use meshtastic_protobufs::meshtastic::{Channel, ChannelSettings, channel};
-    
+    use meshtastic_protobufs::meshtastic::{channel, Channel, ChannelSettings};
+
     let channel_settings = ChannelSettings {
         channel_num: 0, // Deprecated but required
-        psk: &[0x01], // Default AES key
+        psk: &[0x01],   // Default AES key
         name: "LongFast",
         id: 0,
         uplink_enabled: false,
@@ -963,7 +995,6 @@ fn create_channel_packet(packet_id: u32) -> FromRadio<'static> {
     }
 }
 
-
 /// Encode a FromRadio packet to bytes for transmission over serial/BLE/etc
 fn encode_from_radio_packet(packet: &FromRadio, buffer: &mut [u8]) -> Option<usize> {
     let buffer_len = buffer.len();
@@ -979,66 +1010,68 @@ fn encode_from_radio_packet(packet: &FromRadio, buffer: &mut [u8]) -> Option<usi
 }
 
 /// Create a FromRadio packet containing NodeInfo from our internal node database
-fn create_node_info_packet_from_db(packet_id: u32, node: &meshtassy_net::node_database::NodeInfo) -> FromRadio {
-    use meshtastic_protobufs::meshtastic::{User, Position, DeviceMetrics, position};
-    
+fn create_node_info_packet_from_db(
+    packet_id: u32,
+    node: &meshtassy_net::node_database::NodeInfo,
+) -> FromRadio {
+    use meshtastic_protobufs::meshtastic::{position, DeviceMetrics, Position, User};
+
     // Convert user information from node database to protobuf User
     let user = node.user.as_ref().map(|db_user| {
         User {
-            id: "",  // ID field is deprecated in newer versions
+            id: "", // ID field is deprecated in newer versions
             long_name: db_user.long_name.as_str(),
             short_name: db_user.short_name.as_str(),
-            macaddr: &[],  // Deprecated field
+            macaddr: &[], // Deprecated field
             hw_model: db_user.hw_model,
             is_licensed: db_user.is_licensed,
             role: db_user.role,
-            public_key: &[],  // No public key for now
+            public_key: &[], // No public key for now
             is_unmessagable: Some(false),
             unknown_fields: Default::default(),
         }
     });
 
     // Convert position information from node database to protobuf Position
-    let position = node.position.as_ref().map(|db_pos| {
-        Position {
-            latitude_i: Some(db_pos.latitude_i),
-            longitude_i: Some(db_pos.longitude_i),
-            altitude: Some(db_pos.altitude),
-            time: db_pos.time,
-            location_source: db_pos.location_source,
-            altitude_source: femtopb::EnumValue::Known(position::AltSource::AltUnset),
-            timestamp: 0,
-            timestamp_millis_adjust: 0,
-            altitude_hae: None,
-            altitude_geoidal_separation: None,
-            pdop: 0,
-            hdop: 0,
-            vdop: 0,
-            gps_accuracy: 0,
-            ground_speed: None,
-            ground_track: None,
-            fix_quality: 0,
-            fix_type: 0,
-            sats_in_view: 0,
-            sensor_id: 0,
-            next_update: 0,
-            seq_number: 0,
-            precision_bits: 0,
-            unknown_fields: Default::default(),
-        }
+    let position = node.position.as_ref().map(|db_pos| Position {
+        latitude_i: Some(db_pos.latitude_i),
+        longitude_i: Some(db_pos.longitude_i),
+        altitude: Some(db_pos.altitude),
+        time: db_pos.time,
+        location_source: db_pos.location_source,
+        altitude_source: femtopb::EnumValue::Known(position::AltSource::AltUnset),
+        timestamp: 0,
+        timestamp_millis_adjust: 0,
+        altitude_hae: None,
+        altitude_geoidal_separation: None,
+        pdop: 0,
+        hdop: 0,
+        vdop: 0,
+        gps_accuracy: 0,
+        ground_speed: None,
+        ground_track: None,
+        fix_quality: 0,
+        fix_type: 0,
+        sats_in_view: 0,
+        sensor_id: 0,
+        next_update: 0,
+        seq_number: 0,
+        precision_bits: 0,
+        unknown_fields: Default::default(),
     });
 
     // Convert device metrics from node database to protobuf DeviceMetrics
-    let device_metrics = node.device_metrics.as_ref().map(|db_metrics| {
-        DeviceMetrics {
+    let device_metrics = node
+        .device_metrics
+        .as_ref()
+        .map(|db_metrics| DeviceMetrics {
             battery_level: Some(db_metrics.battery_level),
             voltage: Some(db_metrics.voltage),
             channel_utilization: Some(db_metrics.channel_utilization),
             air_util_tx: Some(db_metrics.air_util_tx),
             uptime_seconds: Some(db_metrics.uptime_seconds),
             unknown_fields: Default::default(),
-        }
-    });
+        });
 
     let node_info = NodeInfo {
         num: node.num,
@@ -1049,7 +1082,7 @@ fn create_node_info_packet_from_db(packet_id: u32, node: &meshtassy_net::node_da
         device_metrics,
         channel: 0,
         via_mqtt: false,
-        hops_away: Some(1),  // Other nodes are at least 1 hop away
+        hops_away: Some(1), // Other nodes are at least 1 hop away
         is_favorite: false,
         is_ignored: false,
         is_key_manually_verified: false,
@@ -1068,21 +1101,22 @@ fn create_node_info_packet_from_db(packet_id: u32, node: &meshtassy_net::node_da
 /// Create a generic FromRadio packet containing a MeshPacket for any supported packet type
 /// This function handles all packet types that should be forwarded as FromRadio::Packet
 fn create_mesh_packet_from_data(packet_id: u32, packet: &DecodedPacket) -> Option<FromRadio> {
-    use meshtastic_protobufs::meshtastic::{MeshPacket, mesh_packet};
-    
+    use meshtastic_protobufs::meshtastic::{mesh_packet, MeshPacket};
+
     // Get the owned data from the received packet
     let Ok(owned_data) = packet.data() else {
         return None;
     };
 
     // Check if this packet type should be forwarded as a FromRadio::Packet
-    let should_forward = matches!(packet.port_num(), 
-        femtopb::EnumValue::Known(PortNum::PositionApp) |
-        femtopb::EnumValue::Known(PortNum::TelemetryApp) |
-        femtopb::EnumValue::Known(PortNum::TextMessageApp) |
-        femtopb::EnumValue::Known(PortNum::RoutingApp) |
-        femtopb::EnumValue::Known(PortNum::TracerouteApp) |
-        femtopb::EnumValue::Known(PortNum::NeighborinfoApp)
+    let should_forward = matches!(
+        packet.port_num(),
+        femtopb::EnumValue::Known(PortNum::PositionApp)
+            | femtopb::EnumValue::Known(PortNum::TelemetryApp)
+            | femtopb::EnumValue::Known(PortNum::TextMessageApp)
+            | femtopb::EnumValue::Known(PortNum::RoutingApp)
+            | femtopb::EnumValue::Known(PortNum::TracerouteApp)
+            | femtopb::EnumValue::Known(PortNum::NeighborinfoApp)
     );
 
     if !should_forward {
@@ -1108,18 +1142,20 @@ fn create_mesh_packet_from_data(packet_id: u32, packet: &DecodedPacket) -> Optio
         next_hop: packet.header.next_hop as u32,
         relay_node: packet.header.relay_node as u32,
         tx_after: 0,
-        payload_variant: Some(mesh_packet::PayloadVariant::Decoded(meshtastic_protobufs::meshtastic::Data {
-            portnum: packet.port_num(),
-            payload: &owned_data.payload[..owned_data.payload_len],
-            want_response: false,
-            dest: packet.header.destination,
-            source: packet.header.source,
-            request_id: 0,
-            reply_id: 0,
-            emoji: 0,
-            bitfield: None,
-            unknown_fields: Default::default(),
-        })),
+        payload_variant: Some(mesh_packet::PayloadVariant::Decoded(
+            meshtastic_protobufs::meshtastic::Data {
+                portnum: packet.port_num(),
+                payload: &owned_data.payload[..owned_data.payload_len],
+                want_response: false,
+                dest: packet.header.destination,
+                source: packet.header.source,
+                request_id: 0,
+                reply_id: 0,
+                emoji: 0,
+                bitfield: None,
+                unknown_fields: Default::default(),
+            },
+        )),
         #[allow(deprecated)]
         delayed: femtopb::EnumValue::Known(mesh_packet::Delayed::NoDelay),
         unknown_fields: Default::default(),
