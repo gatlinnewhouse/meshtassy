@@ -5,19 +5,15 @@
 
 use super::{BoardPeripherals, LoRaPeripherals};
 use embassy_rp::gpio::{Input, Level, Output, Pull};
-use embassy_rp::{adc, bind_interrupts, i2c, pac, peripherals, pio, spi, uart, usb};
-use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+use embassy_rp::{bind_interrupts, i2c, peripherals, spi, usb};
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use static_cell::StaticCell;
 
 bind_interrupts!(struct Irqs {
-    //ADC_IRQ_FIFO => adc::InterruptHandler;
     I2C0_IRQ => i2c::InterruptHandler<peripherals::I2C0>;
-    //I2C1_IRQ => i2c::InterruptHandler<peripherals::I2C1>;
-    //PIO0_IRQ_0 => pio::InterruptHandler<peripherals::PIO0>;
-    //UART0_IRQ => uart::InterruptHandler<peripherals::UART0>;
     USBCTRL_IRQ => usb::InterruptHandler<peripherals::USB>;
 });
 
@@ -63,7 +59,7 @@ pub fn init_board(p: embassy_rp::Peripherals) -> BoardPeripherals {
     let i2c_scl = p.PIN_5;
     let i2c_sda = p.PIN_4;
     static I2C_BUS: StaticCell<
-        Mutex<NoopRawMutex, i2c::I2c<'static, peripherals::I2C0, i2c::Async>>,
+        Mutex<CriticalSectionRawMutex, i2c::I2c<'static, peripherals::I2C0, i2c::Async>>,
     > = StaticCell::new();
     let i2c = i2c::I2c::new_async(p.I2C0, i2c_scl, i2c_sda, Irqs, i2c_config);
     let i2c_bus = I2C_BUS.init(Mutex::new(i2c));
