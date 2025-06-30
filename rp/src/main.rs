@@ -1,8 +1,6 @@
 #![no_std]
 #![no_main]
 
-use core::u32;
-
 use crate::usb_framer::Framer;
 use defmt::*;
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
@@ -50,6 +48,7 @@ static PACKET_ID_COUNTER: Mutex<CriticalSectionRawMutex, u32> = Mutex::new(1);
 // USB static allocations for Embassy's Forever pattern
 static CONFIG_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
 static BOS_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
+static MSOS_DESCRIPTOR: StaticCell<[u8; 256]> = StaticCell::new();
 static CONTROL_BUF: StaticCell<[u8; 64]> = StaticCell::new();
 static STATE: StaticCell<State> = StaticCell::new();
 
@@ -107,6 +106,7 @@ async fn main(spawner: Spawner) {
     // Use static allocations for USB descriptors and buffers
     let config_descriptor = CONFIG_DESCRIPTOR.init([0; 256]);
     let bos_descriptor = BOS_DESCRIPTOR.init([0; 256]);
+    let msos_descriptor = MSOS_DESCRIPTOR.init([0; 256]);
     let control_buf = CONTROL_BUF.init([0; 64]);
     let state = STATE.init(State::new());
 
@@ -115,7 +115,7 @@ async fn main(spawner: Spawner) {
         config,
         config_descriptor,
         bos_descriptor,
-        &mut [],
+        msos_descriptor,
         control_buf,
     );
 

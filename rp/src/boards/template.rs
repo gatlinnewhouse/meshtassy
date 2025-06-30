@@ -54,7 +54,6 @@ pub fn init_board(p: embassy_rp::Peripherals) -> BoardPeripherals {
     let usb_driver = usb::Driver::new(p.USB, Irqs);
 
     // Configure RNG
-    //TODO: investigate actual solution as this amy be wrong
     let rng = embassy_rp::clocks::RoscRng;
 
     // I2C bus config
