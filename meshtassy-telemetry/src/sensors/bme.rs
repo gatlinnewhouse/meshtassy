@@ -1,7 +1,7 @@
 use bosch_bme680::{AsyncBme680, BmeError};
-use defmt::{Formatter, *};
+use defmt::{Formatter, error, info};
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
-use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_time::Delay;
 use embedded_hal::i2c::ErrorType;
 use embedded_hal_async::i2c::I2c;
@@ -10,16 +10,24 @@ use meshtastic_protobufs::meshtastic::EnvironmentMetrics;
 
 use crate::{RemoteError, TelemetrySensor, environmental_telemetry::EnvironmentData};
 
-/// Alias BME typedef for shorter name
-pub type BME<'dev, BUS> = AsyncBme680<I2cDevice<'dev, NoopRawMutex, BUS>, Delay>;
+/// Alias `AsyncBme680` typedef for the shorter name `BME`
+pub type BME<'dev, BUS> = AsyncBme680<I2cDevice<'dev, CriticalSectionRawMutex, BUS>, Delay>;
 
-/// Alias BME Error typeddef for shorter name
-#[allow(dead_code)]
-type BMEError<'dev, BUS> = BmeError<I2cDevice<'dev, NoopRawMutex, BUS>>;
+/// Alias `BmeError` typeddef for the shorter name `BMEError`
+type BMEError<'dev, BUS> = BmeError<I2cDevice<'dev, CriticalSectionRawMutex, BUS>>;
 
-/// Implement TelemetrySensor on the BME
-impl<'dev, BUS: I2c + ErrorType + 'static> TelemetrySensor<BME<'dev, BUS>> {
-    pub fn new(bus: I2cDevice<'dev, NoopRawMutex, BUS>) -> Self {
+/// Implement [`TelemetrySensor`] on the `BME`
+impl<'dev, BUS: I2c + ErrorType + Send + 'static> TelemetrySensor<BME<'dev, BUS>> {
+    /// Creates a new [`TelemetrySensor<BME<'dev, BUS>>`].
+    ///
+    /// # Arguments
+    /// * `bus` - An [`I2cDevice`] type implemented on an `BUS` with the [`I2c`] trait
+    ///
+    /// # Returns
+    /// * `Self` - A [`TelemetrySensor`] for a `BME`
+    #[must_use]
+    #[inline]
+    pub fn new(bus: I2cDevice<'dev, CriticalSectionRawMutex, BUS>) -> Self {
         Self {
             device: bosch_bme680::AsyncBme680::new(
                 bus,
@@ -36,32 +44,24 @@ impl<BUS: I2c + ErrorType> defmt::Format for RemoteError<BMEError<'_, BUS>>
 where
     <BUS as ErrorType>::Error: defmt::Format,
 {
+    #[inline]
     fn format(&self, fmt: Formatter) {
         match &self.error {
-            BmeError::WriteError(e) => defmt::write!(fmt, "Write Error: {:#?}", e),
-            BmeError::WriteReadError(e) => defmt::write!(fmt, "Write Read Error: {:#?}", e),
-            BmeError::UnexpectedChipId(e) => defmt::write!(fmt, "Unexpected Chip ID: {}", e),
+            BmeError::WriteError(err) => defmt::write!(fmt, "Write Error: {:#?}", err),
+            BmeError::WriteReadError(err) => defmt::write!(fmt, "Write Read Error: {:#?}", err),
+            BmeError::UnexpectedChipId(err) => defmt::write!(fmt, "Unexpected Chip ID: {}", err),
             BmeError::MeasuringTimeOut => defmt::write!(fmt, "Measuring Timeout"),
             BmeError::Uninitialized => defmt::write!(fmt, "Uninitialized"),
         }
     }
 }
 
-/// Implement EnvironmentData for BME
-impl<BUS: I2c + ErrorType> EnvironmentData for TelemetrySensor<BME<'static, BUS>>
+/// Implement [`EnvironmentData`] for BME
+impl<BUS: I2c + ErrorType + Send> EnvironmentData for TelemetrySensor<BME<'static, BUS>>
 where
     <BUS as embedded_hal::i2c::ErrorType>::Error: defmt::Format,
 {
-    async fn setup(&mut self) {
-        let cfg = bosch_bme680::Configuration::default();
-        match self.device.initialize(&cfg).await {
-            Ok(_) => info!("BME680 Configured"),
-            Err(e) => {
-                let re = RemoteError::<BMEError<BUS>> { error: e };
-                error!("Error configuring BME680: {:?}", re)
-            }
-        }
-    }
+    #[inline]
     async fn get_metrics(&mut self) -> Option<EnvironmentMetrics<'_>> {
         match self.device.measure().await {
             Ok(data) => {
@@ -100,6 +100,17 @@ where
                 let re = RemoteError::<BMEError<BUS>> { error: e };
                 error!("Error fetching data from BME: {:?}", re);
                 None
+            }
+        }
+    }
+    #[inline]
+    async fn setup(&mut self) {
+        let cfg = bosch_bme680::Configuration::default();
+        match self.device.initialize(&cfg).await {
+            Ok(_a) => info!("BME680 Configured"),
+            Err(err) => {
+                let re = RemoteError::<BMEError<BUS>> { error: err };
+                error!("Error configuring BME680: {:?}", re);
             }
         }
     }

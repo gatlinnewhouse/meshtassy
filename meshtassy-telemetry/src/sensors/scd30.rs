@@ -1,6 +1,6 @@
-use defmt::*;
+use defmt::{error, info};
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
-use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_time::Delay;
 use embedded_hal::i2c::ErrorType;
 use embedded_hal_async::i2c::I2c;
@@ -10,29 +10,35 @@ use meshtastic_protobufs::meshtastic::EnvironmentMetrics;
 
 use crate::{TelemetrySensor, environmental_telemetry::EnvironmentData};
 
-/// Alias SCD30 typedef for shorter name
-#[allow(dead_code)]
-pub type SCD30<'dev, BUS> = Scd30<I2cDevice<'dev, NoopRawMutex, BUS>, Delay>;
+/// Alias `Scd30` typedef for the shorter name `SCD30`
+pub type SCD30<'dev, BUS> = Scd30<I2cDevice<'dev, CriticalSectionRawMutex, BUS>, Delay>;
 
-/// Implement TelemetrySensor on the BME
-impl<'dev, BUS: I2c + ErrorType + 'static> TelemetrySensor<SCD30<'dev, BUS>> {
-    pub fn new(bus: I2cDevice<'dev, NoopRawMutex, BUS>) -> Self {
+/// Implement `TelemetrySensor` on the `SCD30`
+impl<'dev, BUS: I2c + ErrorType + Send + 'static> TelemetrySensor<SCD30<'dev, BUS>> {
+    /// Creates a new [`TelemetrySensor<SCD30<'dev, BUS>>`].
+    ///
+    /// # Arguments
+    /// * `bus` - An [`I2cDevice`] type implemented on an `BUS` with the [`I2c`] trait
+    ///
+    /// # Returns
+    /// * `Self` - A [`TelemetrySensor`] for a `SCD30`
+    #[must_use]
+    #[inline]
+    pub fn new(bus: I2cDevice<'dev, CriticalSectionRawMutex, BUS>) -> Self {
         Self {
             device: Scd30::new(bus, Delay),
         }
     }
 }
 
-/// Implement EnvironmentData for SCD30
-impl<BUS: I2c + ErrorType> EnvironmentData for TelemetrySensor<SCD30<'static, BUS>>
+/// Implement [`EnvironmentData`] for `SCD30`
+impl<BUS: I2c + ErrorType + Send> EnvironmentData for TelemetrySensor<SCD30<'static, BUS>>
 where
     <BUS as ErrorType>::Error: defmt::Format,
 {
-    async fn setup(&mut self) {
-        // not much is required initially here. perhaps eventually this runs the calibration routine
-    }
+    #[inline]
     async fn get_metrics(&mut self) -> Option<EnvironmentMetrics<'_>> {
-        if self.device.data_ready().await.is_ok_and(|b| b == true) {
+        if self.device.data_ready().await.is_ok_and(|b| b) {
             match self.device.read_measurement().await {
                 Ok(data) => {
                     info!(
@@ -65,8 +71,8 @@ where
                         unknown_fields: UnknownFields::default(),
                     })
                 }
-                Err(e) => {
-                    error!("Could not get measurements from SCD30: {:?}", e);
+                Err(err) => {
+                    error!("Could not get measurements from SCD30: {:?}", err);
                     None
                 }
             }
@@ -74,4 +80,6 @@ where
             None
         }
     }
+    #[inline]
+    async fn setup(&mut self) {}
 }

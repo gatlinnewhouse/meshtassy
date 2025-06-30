@@ -20,11 +20,19 @@ embedded-hal = { version = "1.0" }
 embedded-hal-async = { version = "1.0" }
 femtopb = { version = "0.8.0", features = ["defmt"] }
 
-# Sensor crates, should probably be dependent on a config that enables/disables them?
-bosch-bme680 = { version = "1.0.4", features = ["embedded-hal-async"] }
-libscd = { version = "0.5.1", features = ["async", "defmt", "scd30"] }
+# Sensor crates
+bosch-bme680 = { version = "1.0.4", features = ["embedded-hal-async"], optional = true }
+libscd = { version = "0.5.1", features = ["async", "defmt", "scd30"], optional = true }
 
 # Local crates
 meshtastic-protobufs = { path = "../meshtastic-protobufs", version = "0.1.0", features = [
   "defmt",
 ] }
+
+[features]
+default = ["bme680", "scd30"]
+bme680 = ["dep:bosch-bme680"]
+scd30 = ["dep:libscd"]
+
+[patch.crates-io]
+embassy-time-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "5e49985ed678659e199c58c8100e3ed18d2f6227" }
