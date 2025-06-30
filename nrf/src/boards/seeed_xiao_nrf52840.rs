@@ -47,7 +47,7 @@ pub fn init_board(p: embassy_nrf::Peripherals) -> BoardPeripherals {
     let spi_sck = p.P1_13;
     let spi_miso = p.P1_14;
     let spi_mosi = p.P1_15;
-    let spim = spim::Spim::new(p.TWISPI1, Irqs, spi_sck, spi_miso, spi_mosi, spi_config);
+    let spim = spim::Spim::new(p.TWISPI0, Irqs, spi_sck, spi_miso, spi_mosi, spi_config);
     let spi = ExclusiveDevice::new(spim, nss, Delay);
 
     // Configure LEDs (active low)

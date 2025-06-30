@@ -97,7 +97,7 @@ meshtassy-net = { path = "../meshtassy-net", version = "0.1.0", default-features
 meshtassy-telemetry = { path = "../meshtassy-telemetry", version = "0.1.0" }
 
 [features]
-default = ["board-wisblock-rak4631"]
+default = ["board-seeed-xiao-nrf52840"]
 
 # Board-specific features
 board-seeed-xiao-nrf52840 = []
