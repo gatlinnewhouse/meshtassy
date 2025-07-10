@@ -19,10 +19,12 @@ defmt = "1.0.1"
 embedded-hal = { version = "1.0" }
 embedded-hal-async = { version = "1.0" }
 femtopb = { version = "0.8.0", features = ["defmt"] }
+async-trait = "0.1"
 
 # Sensor crates
-bosch-bme680 = { version = "1.0.4", features = ["embedded-hal-async"], optional = true }
-libscd = { version = "0.5.1", features = ["async", "defmt", "scd30"], optional = true }
+bosch-bme680 = { version = "1.0", features = ["embedded-hal-async"], optional = true }
+libscd = { version = "0.5", features = ["async", "defmt"], optional = true }
+sht4x = { version = "0.2", features = ["embedded-hal-async", "defmt"], optional = true }
 
 # Local crates
 meshtastic-protobufs = { path = "../meshtastic-protobufs", version = "0.1.0", features = [
@@ -30,9 +32,10 @@ meshtastic-protobufs = { path = "../meshtastic-protobufs", version = "0.1.0", fe
 ] }
 
 [features]
-default = ["bme680", "scd30"]
+default = ["bme680", "scd30", "sht4x"]
 bme680 = ["dep:bosch-bme680"]
-scd30 = ["dep:libscd"]
+scd30 = ["dep:libscd", "libscd/scd30"]
+sht4x = ["dep:sht4x"]
 
 [patch.crates-io]
 embassy-time-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "5e49985ed678659e199c58c8100e3ed18d2f6227" }

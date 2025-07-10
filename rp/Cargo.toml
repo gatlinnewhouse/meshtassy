@@ -55,6 +55,7 @@ embassy-embedded-hal = { version = "0.3.0", git = "https://github.com/embassy-rs
 defmt = "1.0.1"
 defmt-rtt = "1.0.0"
 
+embedded-alloc = "0.6.0"
 fixed = "1.10.0"
 static_cell = { version = "2" }
 portable-atomic = { version = "1.11.1", features = ["critical-section"] }

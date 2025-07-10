@@ -9,8 +9,12 @@ use embassy_rp::{bind_interrupts, i2c, peripherals, spi, usb};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::Delay;
+use embedded_alloc::LlffHeap as Heap;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use static_cell::StaticCell;
+
+#[global_allocator]
+static HEAP: Heap = Heap::empty();
 
 bind_interrupts!(struct Irqs {
     I2C0_IRQ => i2c::InterruptHandler<peripherals::I2C0>;
@@ -29,6 +33,13 @@ bind_interrupts!(struct Irqs {
 ///
 /// This board has no user-controllable LEDs
 pub fn init_board(p: embassy_rp::Peripherals) -> BoardPeripherals {
+    {
+        use core::mem::MaybeUninit;
+        const HEAP_SIZE: usize = 1024;
+        static mut HEAP_MEM: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
+        unsafe { HEAP.init(&raw mut HEAP_MEM as usize, HEAP_SIZE) }
+    }
+
     // Configure LoRa radio pins (replace with actual pins for your board)
     let nss = Output::new(p.PIN_3, Level::High);
     let reset = Output::new(p.PIN_15, Level::High);

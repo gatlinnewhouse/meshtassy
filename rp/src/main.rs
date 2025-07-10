@@ -32,9 +32,11 @@ use meshtassy_net::{DecodedPacket, Decrypted, Encrypted, Header, Packet};
 use meshtastic_protobufs::meshtastic::{
     Data, FromRadio, MyNodeInfo, NodeInfo, PortNum, ToRadio, User,
 };
-mod usb_framer;
 
 mod boards;
+mod usb_framer;
+
+extern crate alloc;
 
 static PACKET_CHANNEL: PubSubChannel<CriticalSectionRawMutex, DecodedPacket, 8, 8, 1> =
     PubSubChannel::<CriticalSectionRawMutex, DecodedPacket, 8, 8, 1>::new();
@@ -135,20 +137,32 @@ async fn main(spawner: Spawner) {
     //sensors
 
     if let Some(i2c_bus) = board.i2c {
-        use crate::boards::I2CBus;
-        use meshtassy_telemetry::environmental_telemetry::EnvironmentData;
-        use meshtassy_telemetry::sensors::bme::BME;
-        use meshtassy_telemetry::sensors::scd30::SCD30;
+        use meshtassy_telemetry::sensors::bme::new_bme;
+        use meshtassy_telemetry::sensors::scd30::new_scd30;
+        use meshtassy_telemetry::sensors::sht4x::new_sht4x;
+        use meshtassy_telemetry::SensorVariants;
+        use meshtassy_telemetry::Sensors;
         use meshtassy_telemetry::TelemetrySensor;
 
+        let mut sensors = Sensors::new();
+
         let i2c_dev1 = I2cDevice::new(i2c_bus);
-        let mut bme = TelemetrySensor::<BME<'_, I2CBus>>::new(i2c_dev1);
-        bme.setup().await;
+        let mut bme = new_bme(i2c_dev1);
+        let _ = bme.setup().await;
+        sensors.add(TelemetrySensor { device: bme });
         let i2c_dev2 = I2cDevice::new(i2c_bus);
-        let mut scd30 = TelemetrySensor::<SCD30<'_, I2CBus>>::new(i2c_dev2);
-        scd30.setup().await;
-        let _metrics = scd30.get_metrics().await;
-        let _metrics = bme.get_metrics().await;
+        let mut scd30 = new_scd30(i2c_dev2);
+        let _ = scd30.setup().await;
+        sensors.add(TelemetrySensor { device: scd30 });
+        let i2c_dev3 = I2cDevice::new(i2c_bus);
+        let mut sht4x = new_sht4x(i2c_dev3);
+        sensors.add(TelemetrySensor { device: sht4x });
+
+        let _metrics = sensors.get_metrics(SensorVariants::Environmental).await;
+        let _metrics = sensors.get_metrics(SensorVariants::AirQuality).await;
+        let _metrics = sensors.get_metrics(SensorVariants::Environmental).await;
+        let _metrics = sensors.get_metrics(SensorVariants::Environmental).await;
+        let _metrics = sensors.get_metrics(SensorVariants::Environmental).await;
     }
 
     // are we configured to use DIO2 as RF switch?  (This should be true for Sx1262)
